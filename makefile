@@ -7,11 +7,13 @@ CFLAGS = \
 	 -Werror \
 	 -pedantic \
 	 -fsanitize=address \
-	 -fno-omit-frame-pointer
+	 -fno-omit-frame-pointer \
+     -fsanitize=float-cast-overflow \
+	 -fopenmp 
 
 CFLAGS_OPT = \
-	     -O2 \
-	     -march=native
+	     -O3 \
+	     -march=native 
 
 LIB = \
       -lm \
@@ -24,7 +26,11 @@ OBJ = \
       obj/potential.o \
       obj/run.o \
 	  obj/verlet.o \
-	  obj/fft.o
+	  obj/fft.o \
+	  obj/t1.o \
+	  obj/t2.o \
+	  obj/t3.o \
+
 	  
 MAIN = \
        obj/main.o
@@ -52,6 +58,7 @@ clean:
 	find -iname "*.d" -exec rm {} \;
 	rm -f program run-test
 	rm -rf obj obj_test
+	rm -rf *Zone.Identifier
 	rm -f H1
 
 .PHONY: clean
