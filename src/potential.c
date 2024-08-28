@@ -161,7 +161,6 @@ void get_forces_AL(double forces[][3], double positions[][3], double cell_length
   
   /* Compute forces on atoms. */
 	/* Loop over atoms again :-(. */
-  
   for (i = 0; i < nbr_atoms; i++) {
     /* Periodically translate coords of current particle to positive quadrants */
 		sxi = sx[i] - floor(sx[i]);

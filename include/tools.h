@@ -130,19 +130,21 @@ double kinetic_energy(
 
 
 void velocity_correlation(
-		double *vfc,
-		double vel[][3],
-		int n_times,
-		int n_atoms,
-		int n_eq);
+	double *vfc,
+	double vel[][3],
+	int n_times,
+	int n_atoms);
 
 
 void mean_squared_displacement(
-		double *msd,
-		double pos[][3],
-		int n_times,
-		int n_atoms,
-		int n_eq);
+	double *msd,
+	double pos[][3],
+	int n_times,
+	int n_atoms);
 
-
-
+void write_positions(
+	char *fname, 
+	double pos[][3],
+	int n_time, 
+	int n_atoms,
+	double *timerange);

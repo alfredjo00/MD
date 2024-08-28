@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include "tools.h"
+#include <omp.h>
+
 
 #define SQ(X) ((X) * (X))
 void elementwise_addition(
@@ -155,7 +157,13 @@ void write_to_file(char *fname, double **arr, int n_points, int n_cols)
 	FILE *fp = fopen(fname, "w");
 	for(int i = 0; i < n_points; ++i){
 		for (int j = 0; j < n_cols; ++j){
-			fprintf(fp, "%.5e\t\t", arr[j][i]);
+      if (isnan(arr[j][i]))
+        printf("%f\n", arr[j][i]);
+			if (fprintf(fp, "%.5e\t\t", arr[j][i]) < 0 ) {
+        perror("Error writing file.");
+        fclose(fp);
+        exit(EXIT_FAILURE);
+      }
 		}
 		fprintf(fp, "\n");
 	}
@@ -216,25 +224,52 @@ double kinetic_energy(double vel[][3], int n_atoms, double m)
 	return ke;
 }
 
-void velocity_correlation(double *vfc, double vel[][3], int n_times, int n_atoms, int n_eq){
-	for (int i = 0; i < n_times - n_eq; ++i){
-		for (int h = 0; h < n_times - n_eq - i; ++h){
-			for (int j = 0; j < n_atoms; ++j){
-				vfc[i] += (vel[n_eq + j + (h + i) * n_atoms][0] * vel[n_eq + j + h * n_atoms][0] +
-						   vel[n_eq + j + (h + i) * n_atoms][1] * vel[n_eq + j + h * n_atoms][1] +
-						   vel[n_eq + j + (h + i) * n_atoms][2] * vel[n_eq + j + h * n_atoms][2]) / (n_atoms * (n_times - n_eq - h));
-			}
-		}
-	}
+void velocity_correlation(double *vfc, double vel[][3], int n_times, int n_atoms) {
+    #pragma omp parallel for collapse(3)
+    for (int i = 0; i < n_times; ++i) {
+        for (int h = 0; h < n_times - i; ++h) {
+            for (int j = 0; j < n_atoms; ++j) {
+                vfc[i] += (vel[j + (h + i) * n_atoms][0] * vel[j + h * n_atoms][0] +
+                           vel[j + (h + i) * n_atoms][1] * vel[j + h * n_atoms][1] +
+                           vel[j + (h + i) * n_atoms][2] * vel[j + h * n_atoms][2]) / (n_times - h);
+            }
+        }
+    }
+  #pragma omp parallel for
+  for (int i = 0; i < n_times; ++i) {
+    vfc[i] /= n_atoms;
+  }
 }
 
-void mean_squared_displacement(double *msd, double pos[][3], int n_times, int n_atoms, int n_eq){
-	for (int i = n_eq; i < n_times; ++i){
-		for (int j = 0; j < n_atoms; ++j){
-			msd[i-n_eq] += (SQ(pos[j +  i * n_atoms][0] - pos[j ][0]) +
-					   SQ(pos[j +  i * n_atoms][1] - pos[j ][1]) +
-					   SQ(pos[j +  i * n_atoms][2] - pos[j ][2])) / (n_atoms );
-		}
-	}
+void mean_squared_displacement(double *msd, double pos[][3], int n_times, int n_atoms) {
+    #pragma omp parallel for collapse(2)
+    for (int i = 0; i < n_times; ++i) {
+        for (int j = 0; j < n_atoms; ++j) {
+            msd[i] += (SQ(pos[j + i * n_atoms][0] - pos[j][0]) +
+                        SQ(pos[j + i * n_atoms][1] - pos[j][1]) +
+                        SQ(pos[j + i * n_atoms][2] - pos[j][2])) / n_atoms;
+        }
+    }
 }
 
+void write_positions(char *fname, double pos[][3], int n_time, int n_atoms, double *timerange)
+{
+  double **f_array;
+  create_2D_array(&f_array, 10, n_time);
+
+  for (int i = 0; i < n_time; ++i){
+    f_array[0][i] = timerange[i];
+    f_array[1][i] = pos[0 +   i * n_atoms][0];
+    f_array[2][i] = pos[0 +   i * n_atoms][1];
+    f_array[3][i] = pos[0 +   i * n_atoms][2];
+    f_array[4][i] = pos[49 +  i * n_atoms][0];
+    f_array[5][i] = pos[49 +  i * n_atoms][1];
+    f_array[6][i] = pos[49 +  i * n_atoms][2];
+    f_array[7][i] = pos[127 + i * n_atoms][0];
+    f_array[8][i] = pos[127 + i * n_atoms][1];
+    f_array[9][i] = pos[127 + i * n_atoms][2];
+  }
+
+  write_to_file(fname, f_array, n_time, 10);
+  destroy_2D_array(f_array, 10);
+}

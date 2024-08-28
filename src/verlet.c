@@ -3,6 +3,7 @@
 #include "potential.h"
 #include "tools.h"
 #include <math.h>
+#include <omp.h>
 
 #define k_b 8.617333262e-5
 #define SQ(X) ((X) * (X))
@@ -101,6 +102,15 @@ double instant_pressure(
 	double T = instant_temperature(v, m, n_atoms);
 	return (n_atoms * k_b * T + virial)/cell_V;
 }
+
+
+#include <time.h>
+
+// Function to calculate the difference between two timespec values
+double timespec_diff(struct timespec *start, struct timespec *end) {
+    return (end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec) / 1e9;
+}
+
 /*
  		int n_timesteps => Total number of time steps
 		int n_atoms     => Number of atoms
@@ -121,7 +131,7 @@ double instant_pressure(
 void verlet_equilibration_scaling(
 		int n_timesteps, 
 		int n_atoms,
-		int skip,
+		int N_eq,
 		int n_cells,
 		double positions[][3],
 		double velocities[][3],
@@ -139,9 +149,8 @@ void verlet_equilibration_scaling(
 	double (*F)[3] 		= malloc(sizeof(double[n_atoms][3]));
 	double (*u)[3] 		= malloc(sizeof(double[n_atoms][3]));
 	double (*w)[3] 		= malloc(sizeof(double[n_atoms][3]));
-	int N_eq = 10000;
 	int a0_N = 1500;
-	double V;
+	double V, n_cells_a0;
 	
 	double tau_T = 200 * dt;
 	double tau_P = 200 * dt;
@@ -161,16 +170,23 @@ void verlet_equilibration_scaling(
 		w[i][2] 	= 0.;
 	}
 	
+	double dt_m = dt * 0.5 / m;
 
 	// calc acc
 	get_forces_AL(F, u, n_cells * a0, n_atoms);	
-	int h = 0;
+
+	
+	// Variables to store start and end times
+	struct timespec start, end;
+	// Record the start time
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
 	for (int i = 1; i < n_timesteps + 1; i++) {
         /* v(t+dt/2) */
         for (int j = 0; j < n_atoms; j++) {
-			w[j][0] += dt * 0.5 * F[j][0] / m;
-			w[j][1] += dt * 0.5 * F[j][1] / m;
-			w[j][2] += dt * 0.5 * F[j][2] / m;
+			w[j][0] += dt_m * F[j][0];
+			w[j][1] += dt_m * F[j][1];
+			w[j][2] += dt_m * F[j][2];
         }
         
         /* q(t+dt) */
@@ -183,33 +199,36 @@ void verlet_equilibration_scaling(
         /* a(t+dt) */
 		get_forces_AL(F, u, n_cells * a0, n_atoms);	
         
-        /* v(t+dt) */
-        for (int j = 0; j < n_atoms; j++) {
-			w[j][0] += dt * 0.5 * F[j][0] / m;
-			w[j][1] += dt * 0.5 * F[j][1] / m;
-			w[j][2] += dt * 0.5 * F[j][2] / m;
-        }
-
-		V = (n_cells * a0) * (n_cells * a0) * (n_cells * a0);
-		virial = get_virial_AL(u, n_cells * a0, n_atoms);
+		/* v(t+dt) */
+		for (int j = 0; j < n_atoms; j++) {
+			w[j][0] += dt_m * F[j][0];
+			w[j][1] += dt_m * F[j][1];
+			w[j][2] += dt_m * F[j][2];
+		}
+		n_cells_a0 = n_cells * a0;
+		V = n_cells_a0 * n_cells_a0 * n_cells_a0;
+		virial = get_virial_AL(u, n_cells_a0, n_atoms);
 		T_inst = instant_temperature(w, m, n_atoms);
 		P_inst = instant_pressure(w, virial, V, m, n_atoms);
 		
 		if (i <= N_eq){
 
-			alpha_T = 1 + (2. * dt / (tau_T)) * ((T_eq - T_inst) / T_inst);
-			alpha_P = 1 - kappa_t * (dt / tau_P) * (P_eq - P_inst);
+			alpha_T = 1. + (2. * dt / (tau_T)) * ((T_eq - T_inst) / T_inst);
+			alpha_P = 1. - kappa_t * (dt / tau_P) * (P_eq - P_inst);
 
+			double sqrt_alpha_T = sqrt(alpha_T);
+			double cbrt_alpha_P = cbrt(alpha_P);
+			
 			for (int j = 0; j < n_atoms; j++) {
-				w[j][0] *= sqrt(alpha_T);
-				w[j][1] *= sqrt(alpha_T);
-				w[j][2] *= sqrt(alpha_T);
+				w[j][0] *= sqrt_alpha_T;
+				w[j][1] *= sqrt_alpha_T;
+				w[j][2] *= sqrt_alpha_T;
 
-				u[j][0] *= cbrt(alpha_P);
-				u[j][1] *= cbrt(alpha_P);
-				u[j][2] *= cbrt(alpha_P);
+				u[j][0] *= cbrt_alpha_P;
+				u[j][1] *= cbrt_alpha_P;
+				u[j][2] *= cbrt_alpha_P;
 			}
-			a0 *= cbrt(alpha_P);
+			a0 *= cbrt_alpha_P;
 
 			if (i == N_eq){
 				double a0_mean = 0.;
@@ -221,32 +240,37 @@ void verlet_equilibration_scaling(
 		}
 
 
-		if (i % skip == 0){
-			// Printing to see progression.
+		// Printing to see progression.
+		if (i % 500 == 0)
 			printf("T %.3f \t P %.3f \t x0 %.4f \t %d / %d\n",
 					T_inst - 273.15,
 					P_inst * 160.21766208 / 0.0001,
 					u[0][0],
-					i/skip,
-					n_timesteps/skip);
-			// Saving data to arrays
-			for (int j = 0; j < n_atoms; j++) {
-				positions[j + h * n_atoms][0] 	= u[j][0];
-				positions[j + h * n_atoms][1] 	= u[j][1];
-				positions[j + h * n_atoms][2] 	= u[j][2];
-							
-				velocities[j + h * n_atoms][0] 	= w[j][0];
-				velocities[j + h * n_atoms][1] 	= w[j][1];
-				velocities[j + h * n_atoms][2] 	= w[j][2];
-				
-				Temperature[h] 	= T_inst;
-				Pressure[h] 	= P_inst;
-				a0_array[h]		= a0;
-			}
-			h++;
+					i,
+					n_timesteps);
+		// Saving data to arrays
+		for (int j = 0; j < n_atoms; j++) {
+			positions[j + (i - 1) * n_atoms][0]  = u[j][0];
+			positions[j + (i - 1) * n_atoms][1]  = u[j][1];
+			positions[j + (i - 1) * n_atoms][2]  = u[j][2];
+						
+			velocities[j + (i - 1) * n_atoms][0] = w[j][0];
+			velocities[j + (i - 1) * n_atoms][1] = w[j][1];
+			velocities[j + (i - 1) * n_atoms][2] = w[j][2];
+			
+			Temperature[i - 1] 	= T_inst;
+			Pressure[i - 1] 	= P_inst;
+			a0_array[i - 1]		= a0;
 		}
 	}	
-	free(F); 		F = NULL;
-	free(u); 		u = NULL;
-	free(w); 		w = NULL;
+	
+	// Record the end time
+	clock_gettime(CLOCK_MONOTONIC, &end);
+	// Calculate the elapsed time
+
+	double elapsed_time = timespec_diff(&start, &end);
+	printf("Verlet %f seconds, %f s per 1e3 iteration \n", elapsed_time, 1000 * elapsed_time / n_timesteps);
+	free(F); 	F = NULL;
+	free(u); 	u = NULL;
+	free(w); 	w = NULL;
 }
