@@ -5,28 +5,28 @@ from sklearn.linear_model import LinearRegression
 t0 = 3.335641e-19 * 10**12
 
 
-sns.set('talk')
-N_eq = 10000
+sns.set_theme('talk')
 N_a0 = 1500
 
 state = 'solid'
 
 data = np.loadtxt(f"data/task4_{state}.txt")
+print(data.shape)
 
 def plot_main_solid():
 	fig,ax = plt.subplots(3,figsize=(10,10))
 
 	#* 160.21766208 / 0.0001
 	
-	print("P in bar", np.mean(data[N_eq:,3]) * 160.21766208 / 0.0001, np.std(data[N_eq:,3]) * 160.21766208 / 0.0001)
-	print("a0 mean ", np.mean(data[N_eq:,5]))
-	print("Potential e", np.mean(data[N_eq:,2]), np.std(data[N_eq:,2]))
+	print("P in bar", np.mean(data[:,3]) * 160.21766208 / 0.0001, np.std(data[:,3]) * 160.21766208 / 0.0001)
+	print("a0 mean ", np.mean(data[:,5]))
+	print("Potential e", np.mean(data[:,2]), np.std(data[:,2]))
 	t = data[:,0] * t0
-	ax[0].plot(t, data[N_eq:,1], "-b", markerfacecolor='none', 
+	ax[0].plot(t, data[:,1], "-b", markerfacecolor='none', 
 	    label='Potential energy')
-	ax[1].plot(t, data[N_eq:,1] + data[:,2], "-r", markerfacecolor='none',
+	ax[1].plot(t, data[:,1] + data[:,2], "-r", markerfacecolor='none',
 	    label='Total energy')
-	ax[2].plot(t, data[N_eq:,2], "-k", markerfacecolor='none',
+	ax[2].plot(t, data[:,2], "-k", markerfacecolor='none',
 	    label='Kinetic energy')
 
 	for a in ax:
@@ -42,12 +42,12 @@ def plot_temps_pressures():
 	fig,ax = plt.subplots(2,figsize=(10,10))
 	T = data[:,4] - 273.15
 	P = data[:,3] * 160.21766208 / 0.0001
-	M  = len(P[N_eq:]) / 100
+	M  = len(P[:]) / 100
 	
-	print("P mean", np.mean(P[N_eq:]), np.std(P[N_eq:])/np.sqrt(M))
-	print("T mean", np.mean(T[N_eq:]), np.std(T[N_eq:])/np.sqrt(M))
+	print("P mean", np.mean(P[:]), np.std(P[:])/np.sqrt(M))
+	print("T mean", np.mean(T[:]), np.std(T[:])/np.sqrt(M))
 	
-	print("a0 mean ", np.mean(data[N_a0:N_eq,5]), np.std(data[N_a0:N_eq,5]))
+	print("a0 mean ", np.mean(data[N_a0:,5]), np.std(data[N_a0:,5]))
 	t = data[:,0] * t0
 	
 	ax[0].plot(t, P, "-b", markerfacecolor='none', 

@@ -3,10 +3,10 @@ import numpy as np
 import seaborn as sns
 t0 = 3.335641e-19 * 10**12
 
-def plot_main():
-	sns.set('talk')
+def plot_energy_task3():
+	sns.set_theme('talk')
 
-	data = np.loadtxt("data/task3_energy.txt")
+	data = np.loadtxt("data/task4_solid.txt")
 	fig,ax = plt.subplots(3,figsize=(10,10))
 
 	#* 160.21766208 / 0.0001
@@ -30,10 +30,10 @@ def plot_main():
 	fig.savefig("graphs/task3.jpg", dpi=90)
 	
 	
-def plot_2nd():
-	sns.set('talk')
+def plot_positions_task3():
+	sns.set_theme('talk')
 
-	data = np.loadtxt("data/task3_positions.txt")
+	data = np.loadtxt("data/task4_solid_pos.txt")
 	fig,ax = plt.subplots(3,figsize=(10,10))
 
 
@@ -59,9 +59,9 @@ def plot_2nd():
 	fig.savefig("graphs/task3_positions.jpg", dpi=90)
 
 def plot_msd():	
-	sns.set('talk')
+	sns.set_theme('talk')
 
-	data = np.loadtxt("data/task3_energy.txt")
+	data = np.loadtxt("data/task4_solid_pos.txt")
 	
 	t = data[:,0] * t0
 	msd = data[:,-1]
@@ -73,10 +73,5 @@ def plot_msd():
 	
 	fig.tight_layout()
 	fig.savefig("graphs/task3_msd.jpg", dpi=90)
-	
-if __name__ == "__main__":
-	plot_main()
-	plot_2nd()
-	plot_msd()
 	
 	
